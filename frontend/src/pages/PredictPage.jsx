@@ -16,7 +16,7 @@ import {
 import FaultTimelineChart from '../components/FaultTimelineChart'
 import AiCopilotPanel from '../components/AiCopilotPanel'
 
-const API = 'http://127.0.0.1:8000'
+const API = 'https://netgaurd.onrender.com/'
 
 // ranges taken from the training telemetry, so the form cannot push the model
 // far outside the distribution it was actually fitted on
@@ -156,7 +156,7 @@ const PredictPage = ({ onNavigate }) => {
     } catch (e) {
       console.error('prediction failed:', e)
       setError(
-        'Could not reach the NetGuard API at 127.0.0.1:8000. Start the backend with: uvicorn main:app --reload',
+        'Could not reach the NetGuard API at https://netgaurd.onrender.com. Please try again later.',
       )
     }
 
