@@ -16,7 +16,7 @@ import {
 import FaultTimelineChart from '../components/FaultTimelineChart'
 import AiCopilotPanel from '../components/AiCopilotPanel'
 
-const API = 'https://netgaurd.onrender.com/'
+const API = 'https://netgaurd.onrender.com'
 
 // ranges taken from the training telemetry, so the form cannot push the model
 // far outside the distribution it was actually fitted on
