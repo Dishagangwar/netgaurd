@@ -83,10 +83,11 @@ class RemediationRequest(BaseModel):
 SEVERITY_LABELS = {0: "Normal", 1: "Warning", 2: "Critical"}
 
 GEMINI_CANDIDATE_MODELS = [
-    "gemini-1.5-flash",
+    "gemini-2.5-flash",
+    "gemini-flash-latest",
     "gemini-2.0-flash",
-    "gemini-1.5-flash-latest",
-    "gemini-1.5-pro",
+    "gemini-1.5-flash",
+    "gemini-pro-latest",
 ]
 
 # one shared rule for all three windows, so a red bar means the same thing
