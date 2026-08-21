@@ -82,7 +82,12 @@ class RemediationRequest(BaseModel):
 
 SEVERITY_LABELS = {0: "Normal", 1: "Warning", 2: "Critical"}
 
-GEMINI_MODEL = "gemini-3.6-flash"
+GEMINI_CANDIDATE_MODELS = [
+    "gemini-1.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash-latest",
+    "gemini-1.5-pro",
+]
 
 # one shared rule for all three windows, so a red bar means the same thing
 # wherever it appears on the chart: risk >= 50% is a fault, below it is clear
@@ -113,6 +118,24 @@ def _parse_model_json(raw: str):
         if start != -1 and end > start:
             return json.loads(text[start:end + 1])
         raise
+
+
+def _generate_with_gemini_fallback(prompt: str):
+    """
+    Iterate through available Gemini candidate models to prevent 429 quota limits.
+    """
+    last_err = None
+    for model_name in GEMINI_CANDIDATE_MODELS:
+        try:
+            ai_model = genai.GenerativeModel(model_name)
+            resp = ai_model.generate_content(prompt)
+            if resp and resp.text:
+                return _parse_model_json(resp.text), model_name
+        except Exception as e:
+            print(f"INFO: Model {model_name} rate-limited or unavailable: {e}. Trying fallback...")
+            last_err = e
+            continue
+    raise last_err or Exception("All Gemini models failed.")
 
 
 def _present_window(data: NetworkData):
@@ -351,10 +374,7 @@ anything disruptive runs last. Give 3 prevention items.
 """
 
     try:
-        ai_model = genai.GenerativeModel(GEMINI_MODEL)
-        resp = ai_model.generate_content(prompt)
-        data = _parse_model_json(resp.text)
-
+        data, used_model = _generate_with_gemini_fallback(prompt)
         # normalise, so the UI never has to defend against a missing key
         return {
             "root_cause": data.get("root_cause", ""),
@@ -362,7 +382,7 @@ anything disruptive runs last. Give 3 prevention items.
             "immediate_actions": data.get("immediate_actions", []) or [],
             "prevention": data.get("prevention", []) or [],
             "verification": data.get("verification", ""),
-            "model": GEMINI_MODEL,
+            "model": used_model,
         }
 
     except Exception as e:
@@ -395,13 +415,8 @@ def copilot_action(request: CopilotRequest):
     """
     
     try:
-        # call ai api
-        ai_model = genai.GenerativeModel('gemini-3.6-flash') 
-        resp = ai_model.generate_content(prompt)
-        
-        # clean output if it gives markdown tags
-        clean_json = resp.text.replace('```json', '').replace('```', '').strip()
-        return json.loads(clean_json)
+        data, _ = _generate_with_gemini_fallback(prompt)
+        return data
     
     except Exception as e:
         print("err:", e)

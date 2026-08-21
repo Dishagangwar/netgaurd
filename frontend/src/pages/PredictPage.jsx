@@ -16,7 +16,16 @@ import {
 import FaultTimelineChart from '../components/FaultTimelineChart'
 import AiCopilotPanel from '../components/AiCopilotPanel'
 
-const API = 'https://netgaurd.onrender.com'
+const API = typeof window !== 'undefined' && window.location.origin.includes('http')
+  ? window.location.origin
+  : 'https://netgaurd.onrender.com'
+
+const PREDICTION_STAGES = [
+  { at: 0, text: 'Model is predicting...' },
+  { at: 1300, text: 'Ingesting node telemetry & log features...' },
+  { at: 2700, text: 'Running XGBoost multi-window classifier...' },
+  { at: 4000, text: 'Synthesizing Past, Present & Future risk timeline...' },
+]
 
 // ranges taken from the training telemetry, so the form cannot push the model
 // far outside the distribution it was actually fitted on
@@ -66,6 +75,8 @@ const PredictPage = ({ onNavigate }) => {
   const [form, setForm] = useState(DEFAULTS)
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [loadingPhase, setLoadingPhase] = useState('Model is predicting...')
+  const [progress, setProgress] = useState(0)
   const [error, setError] = useState(null)
 
   // GenAI copilot, only ever engaged when the model actually flags a fault
@@ -123,6 +134,9 @@ const PredictPage = ({ onNavigate }) => {
     setError(null)
     setCopilot(null)
     setCopilotError(null)
+    setResult(null)
+    setProgress(0)
+    setLoadingPhase('Model is predicting...')
 
     const node = Number(form.location)
     if (!Number.isInteger(node) || node < 1) {
@@ -131,15 +145,44 @@ const PredictPage = ({ onNavigate }) => {
       return
     }
 
-    try {
-      const payload = {
-        location: node,
-        severity_type: Number(form.severity_type),
-        num_events: Number(form.num_events),
-        num_resources: Number(form.num_resources),
-        total_log_volume: Number(form.total_log_volume),
+    // Scroll to result panel to show loading animation immediately
+    setTimeout(
+      () => document.getElementById('result')?.scrollIntoView({ behavior: 'smooth' }),
+      50,
+    )
+
+    const payload = {
+      location: node,
+      severity_type: Number(form.severity_type),
+      num_events: Number(form.num_events),
+      num_resources: Number(form.num_resources),
+      total_log_volume: Number(form.total_log_volume),
+    }
+
+    const startTime = Date.now()
+    const DURATION = 5000
+
+    // Set interval to update progress & phrases smoothly over 5 seconds
+    const progressInterval = setInterval(() => {
+      const elapsed = Date.now() - startTime
+      const currentProgress = Math.min(99, (elapsed / DURATION) * 100)
+      setProgress(currentProgress)
+
+      const stage = PREDICTION_STAGES.slice().reverse().find((s) => elapsed >= s.at)
+      if (stage) {
+        setLoadingPhase(stage.text)
       }
-      const res = await axios.post(`${API}/predict/timeline`, payload)
+    }, 50)
+
+    try {
+      // Run API call in parallel with the 5s timer
+      const [res] = await Promise.all([
+        axios.post(`${API}/predict/timeline`, payload),
+        new Promise((resolve) => setTimeout(resolve, DURATION)),
+      ])
+
+      clearInterval(progressInterval)
+      setProgress(100)
 
       if (res.data?.error) {
         setError(`Backend returned an error: ${res.data.error}`)
@@ -154,13 +197,14 @@ const PredictPage = ({ onNavigate }) => {
         if (res.data.fault_count > 0) askCopilot(res.data)
       }
     } catch (e) {
+      clearInterval(progressInterval)
       console.error('prediction failed:', e)
       setError(
-        'Could not reach the NetGuard API at https://netgaurd.onrender.com. Please try again later.',
+        'Could not reach the NetGuard API. Please ensure the backend is running.',
       )
+    } finally {
+      setLoading(false)
     }
-
-    setLoading(false)
   }
 
   const reset = () => {
@@ -169,6 +213,7 @@ const PredictPage = ({ onNavigate }) => {
     setError(null)
     setCopilot(null)
     setCopilotError(null)
+    setProgress(0)
   }
 
   return (
@@ -294,12 +339,12 @@ const PredictPage = ({ onNavigate }) => {
               <button
                 onClick={runPrediction}
                 disabled={loading}
-                className="mt-8 flex w-full items-center justify-center gap-2 rounded-md bg-primary py-4 font-mono font-bold text-dark shadow-[0_0_20px_rgba(253, 230, 138,0.35)] transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-60"
+                className="mt-8 flex w-full items-center justify-center gap-2 rounded-md bg-primary py-4 font-mono font-bold text-dark shadow-[0_0_20px_rgba(253,230,138,0.35)] transition hover:bg-amber-100 disabled:cursor-not-allowed disabled:opacity-80"
               >
                 {loading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    ANALYSING...
+                    PREDICTING... ({Math.round(progress)}%)
                   </>
                 ) : (
                   <>
@@ -327,12 +372,58 @@ const PredictPage = ({ onNavigate }) => {
               </div>
             )}
 
-            {loading && !result && (
-              <div className="flex h-96 flex-col items-center justify-center gap-4 rounded-xl border border-zinc-700 bg-panel">
-                <Loader2 className="h-10 w-10 animate-spin text-primary" />
-                <p className="animate-pulse font-mono text-sm text-primary">
-                  Scoring node, querying history, projecting risk...
-                </p>
+            {loading && (
+              <div className="flex min-h-[420px] flex-col items-center justify-center gap-6 rounded-2xl border border-primary/30 bg-panel/90 p-8 text-center shadow-2xl backdrop-blur">
+                {/* Glowing animated radar ring */}
+                <div className="relative flex items-center justify-center">
+                  <div className="absolute h-24 w-24 animate-ping rounded-full bg-primary/15" />
+                  <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl border border-primary/50 bg-primary/10 shadow-[0_0_35px_rgba(253,230,138,0.25)]">
+                    <Cpu className="h-8 w-8 animate-pulse text-primary" />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-3 py-1 text-xs font-mono font-semibold text-primary">
+                    <span className="h-2 w-2 animate-ping rounded-full bg-primary" />
+                    XGBoost Inference Engine
+                  </div>
+                  <h3 className="font-mono text-xl font-bold text-white tracking-wide transition-all duration-300">
+                    {loadingPhase}
+                  </h3>
+                  <p className="font-mono text-xs text-zinc-400">
+                    Evaluating Node {form.location} • Telemetry parameters locked
+                  </p>
+                </div>
+
+                {/* Progress Bar Container */}
+                <div className="w-full max-w-sm">
+                  <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800/80 p-0.5 border border-zinc-700">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-amber-400 via-primary to-amber-200 shadow-[0_0_12px_rgba(253,230,138,0.5)] transition-all duration-100 ease-out"
+                      style={{ width: `${progress}%` }}
+                    />
+                  </div>
+                  <div className="mt-2 flex justify-between text-xs font-mono text-zinc-500">
+                    <span>Processing Telemetry</span>
+                    <span className="font-bold text-primary">{Math.round(progress)}%</span>
+                  </div>
+                </div>
+
+                {/* Real-time telemetry badges */}
+                <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
+                  <span className="rounded border border-zinc-700/60 bg-dark/60 px-2.5 py-1 text-[11px] font-mono text-zinc-400">
+                    Node: <b className="text-zinc-200">#{form.location}</b>
+                  </span>
+                  <span className="rounded border border-zinc-700/60 bg-dark/60 px-2.5 py-1 text-[11px] font-mono text-zinc-400">
+                    Severity: <b className="text-zinc-200">Type {form.severity_type}</b>
+                  </span>
+                  <span className="rounded border border-zinc-700/60 bg-dark/60 px-2.5 py-1 text-[11px] font-mono text-zinc-400">
+                    Events: <b className="text-zinc-200">{form.num_events}</b>
+                  </span>
+                  <span className="rounded border border-zinc-700/60 bg-dark/60 px-2.5 py-1 text-[11px] font-mono text-zinc-400">
+                    Logs: <b className="text-zinc-200">{form.total_log_volume} MB</b>
+                  </span>
+                </div>
               </div>
             )}
 
