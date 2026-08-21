@@ -1,6 +1,5 @@
 # Python & ML
 __pycache__/
-*.pkl
 .env
 
 # Node/React
