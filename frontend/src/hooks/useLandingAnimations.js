@@ -30,11 +30,6 @@ export const useLandingAnimations = (rootRef) => {
       const hero = gsap.timeline({ defaults: { ease: 'power3.out' } })
 
       hero
-        .from('[data-anim="badge"]', {
-          autoAlpha: 0,
-          y: 24,
-          duration: 0.7,
-        })
         .from(
           '[data-anim="title-char"]',
           {
@@ -46,7 +41,6 @@ export const useLandingAnimations = (rootRef) => {
             duration: 1,
             ease: 'back.out(1.7)',
           },
-          '-=0.3',
         )
         .from(
           '[data-anim="hero-line"]',

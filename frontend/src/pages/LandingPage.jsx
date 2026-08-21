@@ -155,15 +155,7 @@ const LandingPage = ({ onNavigate }) => {
           data-anim="hero-content"
           className="relative mx-auto max-w-4xl px-6 text-center"
         >
-          <span
-            data-anim="badge"
-            className="inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 font-mono text-xs text-primary"
-          >
-            <Sparkles className="h-3.5 w-3.5" />
-            XGBoost &middot; 7,381 telemetry records &middot; Gemini copilot
-          </span>
-
-          <h1 className="mt-8 text-5xl font-black tracking-tight sm:text-7xl">
+          <h1 className="text-5xl font-black tracking-tight sm:text-7xl">
             <Title3D
               segments={[
                 { text: 'NETGUARD ', className: '' },
