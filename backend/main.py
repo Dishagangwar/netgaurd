@@ -68,6 +68,7 @@ class CopilotRequest(BaseModel):
 class RemediationRequest(BaseModel):
     """Everything the copilot needs to reason about one flagged node."""
     location: int
+    role: str = "L1 Engineer"
     severity: int = 0
     severity_label: str = "Unknown"
     past_risk: float = 0.0
@@ -330,10 +331,51 @@ def predict_timeline(data: NetworkData):
 @app.post("/copilot/remediation")
 def copilot_remediation(req: RemediationRequest):
     """
-    Hands a flagged node to Gemini and asks for a root cause read, the commands
-    that mend it now, and the changes that stop it recurring.
+    Hands a flagged node to Gemini and tailors the incident response to the
+    selected user role (L1 Network Engineer vs NOC Operations Manager).
     """
-    prompt = f"""
+    if req.role == "NOC Manager":
+        prompt = f"""
+You are NetGuard AI, the executive incident copilot for a telecom network operations
+centre. You are speaking directly to a NOC Operations Manager and Business Operations Lead.
+
+A network fault has been flagged on node {req.location}.
+
+MACHINE LEARNING VERDICT
+- Classified severity: {req.severity_label} (class {req.severity})
+- Present fault risk (XGBoost): {req.present_risk}%
+- Historical fault risk for this node: {req.past_risk}%
+- Projected future risk: {req.future_risk}%
+- History detail: {req.past_summary or "no recorded history for this node"}
+
+RAW TELEMETRY FOR THIS NODE
+- Alarm severity type: {req.severity_type}
+- Event burst count: {req.num_events}
+- Resource types involved: {req.num_resources}
+- Log volume emitted: {req.total_log_volume} MB
+
+Write the Executive NOC Management Response:
+1. Executive Incident Brief: High-level business summary of the situation and why it matters.
+2. Financial & SLA Impact: Estimated financial loss risk, SLA penalty breach window, and customer subscriber blast radius.
+3. Operational Directives: 3 or 4 step-by-step executive and cross-team actions (e.g. Stakeholder alert, vendor escalation, field crew dispatch authorization, traffic rerouting sign-off).
+4. Long-Term SLA Mitigation: 3 strategic operational changes to protect future SLA contracts.
+5. Executive Clearance: Criteria required before marking the incident closed for business stakeholders.
+
+Respond in pure JSON, exactly this shape and nothing else:
+{{
+  "root_cause": "3 to 4 sentences providing an executive summary of the operational incident and customer blast radius",
+  "impact": "Concrete financial penalty risk, SLA breach exposure, and affected subscriber services",
+  "immediate_actions": [
+    {{"step": "Directive Title", "detail": "Operational explanation and stakeholder impact", "command": "ESCALATION DIRECTIVE"}}
+  ],
+  "prevention": [
+    "strategic operational change to protect future SLA contracts, one sentence each"
+  ],
+  "verification": "executive sign-off and SLA clearance criteria"
+}}
+"""
+    else:
+        prompt = f"""
 You are NetGuard AI, the incident copilot for a telecom network operations
 centre. You are speaking to an L1 network engineer who has to fix this now.
 
@@ -359,7 +401,7 @@ a telecom node, and must include node {req.location} where a target is needed.
 
 Respond in pure JSON, exactly this shape and nothing else:
 {{
-  "root_cause": "3 to 4 sentences naming the most likely root cause and the evidence in the telemetry that points to it",
+  "root_cause": "3 to 3 sentences naming the most likely root cause and the evidence in the telemetry that points to it",
   "impact": "one sentence on what breaks for subscribers or services if this is left alone",
   "immediate_actions": [
     {{"step": "short imperative title", "detail": "one sentence on what this does and what to look for", "command": "a single runnable bash command"}}
@@ -378,6 +420,7 @@ anything disruptive runs last. Give 3 prevention items.
         data, used_model = _generate_with_gemini_fallback(prompt)
         # normalise, so the UI never has to defend against a missing key
         return {
+            "role": req.role,
             "root_cause": data.get("root_cause", ""),
             "impact": data.get("impact", ""),
             "immediate_actions": data.get("immediate_actions", []) or [],
