@@ -148,8 +148,8 @@ const PredictPage = ({ onNavigate }) => {
     setLoadingPhase('Model is predicting...')
 
     const node = Number(form.location)
-    if (!Number.isInteger(node) || node < 1) {
-      setError('Target Node ID must be a whole number of 1 or more.')
+    if (!Number.isInteger(node) || node < 1 || node > 1126) {
+      setError('Target Node ID must be a valid node number between 1 and 1126.')
       setLoading(false)
       return
     }
@@ -281,6 +281,7 @@ const PredictPage = ({ onNavigate }) => {
                     id="node-id"
                     type="number"
                     min={1}
+                    max={1126}
                     value={form.location}
                     onChange={(e) => set('location')(e.target.value)}
                     className="w-full rounded-md border border-zinc-600 bg-dark p-3 font-mono text-lg font-bold text-primary outline-none transition focus:border-primary"

@@ -11,8 +11,20 @@ try:
     resources = pd.read_csv('../data/resource_type.csv')
     logs = pd.read_csv('../data/log_feature.csv')
 
-    train['location'] = train['location'].str.extract(r'(\d+)').astype(int)
-    severity['severity_type'] = severity['severity_type'].str.extract(r'(\d+)').astype(int)
+    # errors='coerce' turns anything that isn't a valid number into NaN
+    # instead of crashing the whole script. dropna() then removes those
+    # bad rows so one messed-up entry doesn't take down the whole merge.
+    train['location'] = pd.to_numeric(
+        train['location'].str.extract(r'(\d+)')[0], errors='coerce'
+    )
+    train = train.dropna(subset=['location'])
+    train['location'] = train['location'].astype(int)
+
+    severity['severity_type'] = pd.to_numeric(
+        severity['severity_type'].str.extract(r'(\d+)')[0], errors='coerce'
+    )
+    severity = severity.dropna(subset=['severity_type'])
+    severity['severity_type'] = severity['severity_type'].astype(int)
 
     merged_df = pd.merge(train, severity, on='id', how='left')
 
